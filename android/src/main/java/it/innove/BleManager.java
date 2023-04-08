@@ -384,6 +384,35 @@ class BleManager extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
+    public void otaFirmwareUpdate(String deviceUUID, String serviceUUID, String characteristicUUID,
+            ReadableArray message, Callback callback) {
+        Log.d(LOG_TAG, "OTA firmware update to: " + deviceUUID);
+
+        if (serviceUUID == null || characteristicUUID == null) {
+            callback.invoke("ServiceUUID and characteristicUUID required.");
+            return;
+        }
+
+        Peripheral peripheral = peripherals.get(deviceUUID);
+
+        if (peripheral == null) {
+            callback.invoke("Peripheral not found");
+            return;
+        }
+
+        byte[] decoded = new byte[message.size()];
+
+        for (int i = 0; i < message.size(); i++) {
+            decoded[i] = new Integer(message.getInt(i)).byteValue();
+        }
+
+        Log.d(LOG_TAG, "Message(" + decoded.length + "): " + bytesToHex(decoded));
+
+        peripheral.writeFirmware(UUIDHelper.uuidFromString(serviceUUID), UUIDHelper.uuidFromString(characteristicUUID),
+                decoded, callback);
+    }
+
+    @ReactMethod
     public void read(String deviceUUID, String serviceUUID, String characteristicUUID, Callback callback) {
         Log.d(LOG_TAG, "Read from: " + deviceUUID);
         if (serviceUUID == null || characteristicUUID == null) {

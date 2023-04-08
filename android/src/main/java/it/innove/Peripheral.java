@@ -50,6 +50,9 @@ public class Peripheral extends BluetoothGattCallback {
     public static final int GATT_INSUFFICIENT_AUTHENTICATION = 5;
     public static final int GATT_AUTH_FAIL = 137;
 
+    private static int MTU = 512;
+    private static double delayNoResponse = 0.5;
+
     private final BluetoothDevice device;
     private final Map<String, NotifyBufferContainer> bufferedCharacteristics;
     protected volatile byte[] advertisingDataBytes = new byte[0];
@@ -1051,6 +1054,67 @@ public class Peripheral extends BluetoothGattCallback {
             }
 
             completedCommand();
+        });
+    }
+
+    public void writeFirmware(UUID serviceUUID, UUID characteristicUUID, byte[] data, Callback callback) {
+        enqueue(() -> {
+            if (!isConnected() || gatt == null) {
+                callback.invoke("Device is not connected", null);
+                completedCommand();
+                return;
+            }
+
+            int writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE;
+
+            BluetoothGattCharacteristic characteristic = gatt.getService(serviceUUID)
+                    .getCharacteristic(characteristicUUID);
+
+            if (characteristic == null) {
+                callback.invoke("Characteristic " + characteristicUUID + " not found.");
+                completedCommand();
+                return;
+            }
+
+            characteristic.setWriteType(writeType);
+
+            try {
+                byte[] value = new byte[MTU - 3];
+                int j = 0;
+
+                for (int i = 0; i <= data.length - 1; i++) {
+                    value[j] = data[i];
+                    j++;
+
+                    if (j >= MTU - 3 || i >= (data.length - 1)) {
+                        long wait = System.nanoTime();
+
+                        if (j < MTU - 3) {
+                            byte[] end = new byte[j];
+                            System.arraycopy(value, 0, end, 0, j);
+                            characteristic.setValue(end);
+                        } else {
+                            j = 0;
+                            characteristic.setValue(value);
+                        }
+
+                        if (gatt.writeCharacteristic(characteristic)) {
+                            while ((System.nanoTime() - wait) / 1000000.0 < delayNoResponse);
+                        } else {
+                            do {
+                                while ((System.nanoTime() - wait) / 1000000.0 < delayNoResponse);
+                                wait = System.nanoTime();
+                            } while (!gatt.writeCharacteristic(characteristic));
+                        }
+                    }
+                }
+
+                callback.invoke();
+
+                completedCommand();
+            } catch (Exception e) {
+                callback.invoke(String.format("OTA DFU Failed: %s", e.getMessage()));
+            }
         });
     }
 

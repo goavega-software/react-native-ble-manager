@@ -26,6 +26,10 @@ public class Helper {
 			props.putString("WriteWithoutResponse", "WriteWithoutResponse");
 		}
 
+		if ((properties & BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE) != 0x0) {
+			props.putString("OTAFirmwareUpdate", "OTAFirmwareUpdate");
+		}
+
 		if ((properties & BluetoothGattCharacteristic.PROPERTY_WRITE) != 0x0 ) {
 			props.putString("Write", "Write");
 		}

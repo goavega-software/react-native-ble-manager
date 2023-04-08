@@ -200,6 +200,7 @@ export interface Characteristic {
     Broadcast?: "Broadcast";
     Read?: "Read";
     WriteWithoutResponse?: "WriteWithoutResponse";
+    OTAFirmwareUpdate?: 'OTAFirmwareUpdate';
     Write?: "Write";
     Notify?: "Notify";
     Indicate?: "Indicate";

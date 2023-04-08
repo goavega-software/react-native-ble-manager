@@ -1,10 +1,15 @@
 #import "BleManager.h"
+#include <objc/NSObjCRuntime.h>
 #import "React/RCTBridge.h"
 #import "React/RCTConvert.h"
 #import "React/RCTEventDispatcher.h"
 #import "NSData+Conversion.h"
 #import "CBPeripheral+Extensions.h"
 #import "BLECommandContext.h"
+
+static NSInteger MTU = 0;
+
+static NSInteger const kByteAlignment = 4;
 
 static CBCentralManager *_sharedManager = nil;
 static BleManager * _instance = nil;
@@ -452,6 +457,12 @@ RCT_EXPORT_METHOD(stopScan:(nonnull RCTResponseSenderBlock)callback)
     }
 }
 
++ (NSUInteger)maximumByteAlignedWriteValueLengthForPeripheral:(CBPeripheral *)peripheral forType:(CBCharacteristicWriteType)type {
+    NSUInteger rawLength = [peripheral maximumWriteValueLengthForType:type];
+    NSLog(@"Max Byte Write Value: %d", rawLength);
+    return kByteAlignment * (rawLength/kByteAlignment);
+}
+
 RCT_EXPORT_METHOD(connect:(NSString *)peripheralUUID callback:(nonnull RCTResponseSenderBlock)callback)
 {
     NSLog(@"Connect");
@@ -635,6 +646,52 @@ RCT_EXPORT_METHOD(writeWithoutResponse:(NSString *)deviceUUID serviceUUID:(NSStr
     }
 }
 
+RCT_EXPORT_METHOD(otaFirmwareUpdate:(NSString *)deviceUUID serviceUUID:(NSString*)serviceUUID  characteristicUUID:(NSString*)characteristicUUID message:(NSArray*)message callback:(nonnull RCTResponseSenderBlock)callback)
+{
+    NSLog(@"otaFirmwareUpdate");
+    
+    BLECommandContext *context = [self getData:deviceUUID serviceUUIDString:serviceUUID characteristicUUIDString:characteristicUUID prop:CBCharacteristicPropertyWriteWithoutResponse callback:callback];
+    unsigned long count = [message count];
+    uint8_t *bytes = malloc(sizeof(*bytes) * count);
+    
+    unsigned i;
+    
+    for (i = 0; i < count; i++)
+    {
+        NSNumber *number = [message objectAtIndex:i];
+        int byte = [number intValue];
+        bytes[i] = byte;
+    }
+    
+    NSData *dataMessage = [NSData dataWithBytesNoCopy:bytes length:count freeWhenDone:YES];
+    
+    if (context) {
+        CBPeripheral *peripheral = [context peripheral];
+        CBCharacteristic *characteristic = [context characteristic];
+        
+        if ([dataMessage length] > MTU) {
+            NSUInteger length = [dataMessage length];
+            NSUInteger offset = 0;
+            
+            do {
+                NSUInteger thisChunkSize = length - offset > MTU ? MTU : length - offset;
+                NSData* chunk = [NSData dataWithBytesNoCopy:(char *)[dataMessage bytes] + offset length:thisChunkSize freeWhenDone:NO];
+                
+                offset += thisChunkSize;
+                
+                [peripheral writeValue:chunk forCharacteristic:characteristic type:CBCharacteristicWriteWithoutResponse];
+            } while (offset < length);
+            
+            NSLog(@"Message to write(%lu): %@ ", (unsigned long)[dataMessage length], [dataMessage hexadecimalString]);
+        } else {
+            NSLog(@"Message to write(%lu): %@ ", (unsigned long)[dataMessage length], [dataMessage hexadecimalString]);
+            
+            [peripheral writeValue:dataMessage forCharacteristic:characteristic type:CBCharacteristicWriteWithoutResponse];
+        }
+        
+        callback(@[]);
+    }
+}
 
 RCT_EXPORT_METHOD(read:(NSString *)deviceUUID serviceUUID:(NSString*)serviceUUID  characteristicUUID:(NSString*)characteristicUUID callback:(nonnull RCTResponseSenderBlock)callback)
 {
@@ -794,7 +851,9 @@ RCT_EXPORT_METHOD(removePeripheral:(NSString *)deviceUUID callback:(nonnull RCTR
 
 RCT_EXPORT_METHOD(requestMTU:(NSString *)deviceUUID mtu:(NSInteger)mtu callback:(nonnull RCTResponseSenderBlock)callback)
 {
-    callback(@[@"Not supported"]);
+    CBPeripheral *peripheral = [self findPeripheralByUUID:deviceUUID];
+    MTU = [BleManager maximumByteAlignedWriteValueLengthForPeripheral:peripheral forType:CBCharacteristicWriteWithoutResponse];
+    callback(@[[NSNull null], [NSNumber numberWithInteger:MTU]]);
 }
 
 - (void)peripheral:(CBPeripheral *)peripheral didWriteValueForCharacteristic:(CBCharacteristic *)characteristic error:(NSError *)error {

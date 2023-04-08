@@ -246,6 +246,10 @@ static char ADVERTISEMENT_RSSI_IDENTIFER;
   if ((p & CBCharacteristicPropertyWriteWithoutResponse) != 0x0) {
     [props setValue:@"WriteWithoutResponse" forKey:@"WriteWithoutResponse"];
   }
+
+  if ((p & CBCharacteristicPropertyWriteWithoutResponse) != 0x0) {
+    [props setValue:@"OTAFirmwareUpdate" forKey:@"OTAFirmwareUpdate"];
+  }
   
   if ((p & CBCharacteristicPropertyWrite) != 0x0) {
     [props setValue:@"Write" forKey:@"Write"];

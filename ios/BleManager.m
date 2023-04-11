@@ -8,6 +8,7 @@
 #import "BLECommandContext.h"
 
 static NSInteger MTU = 0;
+static NSInteger queueSleep = 10;
 
 static NSInteger const kByteAlignment = 4;
 
@@ -680,6 +681,10 @@ RCT_EXPORT_METHOD(otaFirmwareUpdate:(NSString *)deviceUUID serviceUUID:(NSString
                 offset += thisChunkSize;
                 
                 [peripheral writeValue:chunk forCharacteristic:characteristic type:CBCharacteristicWriteWithoutResponse];
+                
+                NSTimeInterval sleepTimeSeconds = (NSTimeInterval) queueSleep / 1000;
+                
+                [NSThread sleepForTimeInterval: sleepTimeSeconds];
             } while (offset < length);
             
             NSLog(@"Message to write(%lu): %@ ", (unsigned long)[dataMessage length], [dataMessage hexadecimalString]);
